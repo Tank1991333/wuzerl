@@ -1,7 +1,7 @@
 // Service Worker: macht die App offline nutzbar.
 // Speichert nur die App-Dateien, niemals eure Einträge.
 // Bei einer neuen Version CACHE hochzählen.
-const CACHE = 'wuzerl-1.0.0';
+const CACHE = 'wuzerl-1.0.1';
 const FILES = ['./', './index.html', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png', './icons/apple-touch-icon.png'];
 
@@ -21,7 +21,10 @@ self.addEventListener('fetch', e => {
   if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
   if (req.mode === 'navigate') {
     e.respondWith(fetch(req).then(r => {
-      const copy = r.clone(); caches.open(CACHE).then(c => c.put('./index.html', copy)); return r;
+      // Nur eine echte App-Seite cachen, nie eine Fehlerseite (sonst geht die App offline nicht mehr)
+      const p = new URL(req.url).pathname, scope = new URL(self.registration.scope).pathname;
+      if (r.ok && (p === scope || p === scope + 'index.html')) { const copy = r.clone(); caches.open(CACHE).then(c => c.put('./index.html', copy)); }
+      return r;
     }).catch(() => caches.match('./index.html')));
     return;
   }

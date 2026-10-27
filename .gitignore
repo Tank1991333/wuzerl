@@ -1,0 +1,5 @@
+# Exportierte Daten niemals ins Repository
+wuzerl-*.json
+unser-baby-*.json
+*.ics
+.DS_Store

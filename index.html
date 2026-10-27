@@ -99,7 +99,7 @@ p{margin:0}
 
 /* segmented + chips */
 .seg{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 12px}
-.seg button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 14px;font-size:.9rem}
+.seg button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:8px 14px;font-size:.9rem;min-height:38px}
 .seg button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--bg)}
 
 /* forms */
@@ -113,6 +113,9 @@ textarea{min-height:70px;resize:vertical}
 .inline{display:flex;gap:8px;align-items:center}
 .inline input{margin-top:0}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid2>*{min-width:0}
+input[type=date],input[type=time]{min-width:0;min-height:44px;-webkit-appearance:none;appearance:none}
+label.btn:focus-within,.filebtn:focus-within{outline:3px solid var(--pass-deep);outline-offset:2px}
 .toggle{display:flex;gap:10px;align-items:center;margin-top:12px}
 .toggle input{width:22px;height:22px}
 
@@ -129,7 +132,7 @@ textarea{min-height:70px;resize:vertical}
 .stats span{font-size:.78rem;color:var(--muted)}
 .day{font-weight:700;margin:18px 0 6px;font-size:.95rem}
 .time{font-variant-numeric:tabular-nums;font-weight:700;min-width:46px}
-.del{border:0;background:none;color:var(--muted);font-size:.85rem;padding:2px 4px}
+.del{border:0;background:none;color:var(--muted);font-size:.85rem;padding:6px 8px;margin:-4px -4px}
 .del.arm{color:var(--warn);font-weight:700}
 
 .progress{height:6px;border-radius:6px;background:var(--sunk);overflow:hidden;margin:8px 0 12px}
@@ -200,7 +203,7 @@ const val=(v,ks)=>typeof v==='function'?v(ks):v;
 const num=s=>{const n=Number(String(s||'').replace(',','.'));return isFinite(n)?n:0};
 
 /* ---------- store: nur auf diesem Gerät (IndexedDB) ---------- */
-const APP_VERSION='1.0.0';
+const APP_VERSION='1.0.1';
 const LK='unserbaby:v1',ME='unserbaby:me',KURZ='unserbaby:kurz',SYNC='unserbaby:sync';
 const COLLS=['meta','checks','logs','pass','appts','contr','names','contacts','diary'];
 const blank=()=>Object.fromEntries(COLLS.map(c=>[c,{}]));
@@ -277,7 +280,7 @@ let tt;function toast(t){const el=document.getElementById('toast');el.textConten
 const set=()=>meta('settings');
 const nameOf=k=>k==='M'?(set().nameM||'Mama'):k==='P'?(set().nameP||'Papa'):'Beide';
 const nextWho=k=>k==='M'?'P':k==='P'?'B':'M';
-const whoBtn=(k,act,id)=>`<button class="who ${k}" data-a="${act}" data-id="${esc(id)}" aria-label="Zuständig: ${esc(nameOf(k))}, tippen zum Wechseln">${esc(nameOf(k))}</button>`;
+const whoBtn=(k,act,id)=>{k=['M','P','B'].includes(k)?k:'B';return `<button class="who ${k}" data-a="${act}" data-id="${esc(id)}" aria-label="Zuständig: ${esc(nameOf(k))}, tippen zum Wechseln">${esc(nameOf(k))}</button>`};
 const check=(on,act,id)=>`<button class="check ${on?'on':''}" data-a="${act}" data-id="${esc(id)}" aria-label="${on?'Als offen markieren':'Als erledigt markieren'}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 8.5l3.2 3L13 4.5"/></svg></button>`;
 
 function status(){
@@ -403,7 +406,8 @@ function delBtn(act,id){if(S.ro)return '';const a=S.ui.arm===act+id;return `<but
 
 /* ---------- calendar export (.ics) ---------- */
 function icsEsc(s){return String(s||'').replace(/\\/g,'\\\\').replace(/\r?\n/g,'\\n').replace(/,/g,'\\,').replace(/;/g,'\\;')}
-function fold(l){const out=[];while(l.length>70){out.push(l.slice(0,70));l=' '+l.slice(70)}out.push(l);return out.join('\r\n')}
+const TE=new TextEncoder();
+function fold(l){const out=[];let cur='',n=0;for(const ch of l){const b=TE.encode(ch).length;if(n+b>75){out.push(cur);cur=' ';n=1}cur+=ch;n+=b}out.push(cur);return out.join('\r\n')}
 const ds=d=>iso(d).replace(/-/g,'');
 function buildIcs(){
   const stamp=new Date().toISOString().replace(/[-:]/g,'').replace(/\.\d+/,'');
@@ -543,7 +547,7 @@ function viewTermine(){
   let h=`<h1 style="font-size:1.8rem;margin:6px 0 4px">Termine und Fristen</h1>
   <p class="note">Richtwerte nach österreichischem Stand (Oktober 2026). Genaue Fristen bei ÖGK, oesterreich.gv.at oder der Arbeiterkammer prüfen.</p>`;
   if(!S.ro){
-    h+=`<div class="grid2" style="margin-top:12px"><button class="btn" data-a="appt-toggle">${S.ui.apptForm?'Abbrechen':'Termin eintragen'}</button><button class="btn ghost" data-a="ics">In Kalender</button></div>${true?'<p class="small muted" style="margin-top:6px">Exportierte Termine liegen danach auch bei eurem Kalenderanbieter. Gesundheitsdaten sind darin nicht enthalten.</p>':''}`;
+    h+=`<div class="grid2" style="margin-top:12px"><button class="btn" data-a="appt-toggle">${S.ui.apptForm?'Abbrechen':'Termin eintragen'}</button><button class="btn ghost" data-a="ics">In Kalender</button></div><p class="small muted" style="margin-top:6px">Exportierte Termine liegen danach auch bei eurem Kalenderanbieter. Gesundheitsdaten sind darin nicht enthalten.</p>`;
     if(S.ui.apptForm)h+=`<div class="card" style="margin-top:10px">
       <label class="f" style="margin-top:0">Was<input type="text" id="aTitle" maxlength="100" placeholder="z. B. 3. Untersuchung bei Dr. Huber"></label>
       <div class="grid2"><label class="f">Datum<input type="date" id="aDate" value="${iso(today())}"></label><label class="f">Uhrzeit<input type="time" id="aTime"></label></div>
@@ -595,11 +599,11 @@ function trackerSummary(){
   const feeds=T.filter(x=>x.type==='stillen_l'||x.type==='stillen_r').length;
   const ml=T.filter(x=>x.type==='flasche').reduce((a,x)=>a+(Number(x.ml)||0),0);
   const diapers=T.filter(x=>x.type==='nass'||x.type==='voll').length;
-  const sleep=T.filter(x=>x.type==='schlaf'&&x.end).reduce((a,x)=>a+(x.end-x.at),0);
+  const sleep=T.filter(x=>x.type==='schlaf'&&x.end).reduce((a,x)=>a+Math.max(0,x.end-x.at),0);
   const lastFeed=L.find(x=>['stillen_l','stillen_r','flasche'].includes(x.type));
   const st=meta('state'),lastMed=L.find(x=>x.type==='medi');
   let h=`<div class="card"><div class="stats"><div><b>${feeds}</b><span>Stillen</span></div><div><b>${ml}</b><span>ml Flasche</span></div><div><b>${diapers}</b><span>Windeln</span></div><div><b>${(sleep/36e5).toFixed(1).replace('.',',')}</b><span>Std Schlaf</span></div></div>`;
-  if(lastFeed)h+=`<p class="small muted" style="margin-top:10px">Letzte Mahlzeit vor ${dur(Date.now()-lastFeed.at)} (${esc(LT[lastFeed.type])}${lastFeed.ml?', '+lastFeed.ml+' ml':''})</p>`;
+  if(lastFeed)h+=`<p class="small muted" style="margin-top:10px">Letzte Mahlzeit vor ${dur(Date.now()-lastFeed.at)} (${esc(LT[lastFeed.type])}${lastFeed.ml?', '+esc(lastFeed.ml)+' ml':''})</p>`;
   if(st.sleepStart)h+=`<p class="small" style="margin-top:4px;font-weight:700">Schläft seit ${hm(st.sleepStart)}</p>`;
   if(lastMed&&Date.now()-lastMed.at<24*36e5)h+=`<p class="small muted" style="margin-top:4px">Letztes Medikament: ${esc(lastMed.med||'')} ${esc(lastMed.dose||'')} vor ${dur(Date.now()-lastMed.at)}</p>`;
   return h+`</div>`;
@@ -709,11 +713,11 @@ function viewTagebuch(){
    <label class="f">Datum<input type="date" id="dDate" value="${iso(today())}"></label>
    <label class="f">Was ist passiert?<textarea id="dText" maxlength="1500" placeholder="z. B. Erstes Lächeln beim Wickeln"></textarea></label>
    <label class="filebtn">${S.ui.photo?'Foto ändern':'Foto hinzufügen'}<input type="file" accept="image/*" id="dPhoto"></label>
-   ${S.ui.photo?`<img class="photo" src="${S.ui.photo}" alt="Vorschau">`:''}
+   ${S.ui.photo?`<img class="photo" src="${esc(S.ui.photo)}" alt="Vorschau">`:''}
    <button class="btn block" data-a="diary-add">Moment speichern</button></div>`;
   h+=`<h2>Momente</h2>`;
   if(!list.length)return h+`<div class="card empty">Noch nichts festgehalten. Erste Tritte, erstes Lächeln, erstes Wort: alles hat hier Platz.</div>`;
-  return h+list.map(e=>`<div class="card"><p class="small muted">${pd(e.date)?fmtLong(pd(e.date)):''}, ${esc(nameOf(e.by||'B'))}</p>${e.text?`<p style="margin-top:4px">${esc(e.text)}</p>`:''}${typeof e.photo==='string'&&e.photo.startsWith('data:image/')?`<img class="photo" src="${e.photo}" alt="Foto vom ${esc(e.date)}" loading="lazy">`:''}<p style="margin-top:6px">${delBtn('diary-del',e.id)}</p></div>`).join('');
+  return h+list.map(e=>`<div class="card"><p class="small muted">${pd(e.date)?fmtLong(pd(e.date)):''}, ${esc(nameOf(e.by||'B'))}</p>${e.text?`<p style="margin-top:4px">${esc(e.text)}</p>`:''}${typeof e.photo==='string'&&e.photo.startsWith('data:image/')?`<img class="photo" src="${esc(e.photo)}" alt="Foto vom ${esc(e.date)}" loading="lazy">`:''}<p style="margin-top:6px">${delBtn('diary-del',e.id)}</p></div>`).join('');
 }
 function compress(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>{const img=new Image();img.onload=()=>{let max=1100,q=.78;const go=()=>{const sc=Math.min(1,max/Math.max(img.width,img.height)),c=document.createElement('canvas');c.width=Math.round(img.width*sc);c.height=Math.round(img.height*sc);c.getContext('2d').drawImage(img,0,0,c.width,c.height);const u=c.toDataURL('image/jpeg',q);if(u.length>190000&&max>320){max=Math.round(max*.8);q=Math.max(.55,q-.05);return go()}res(u)};go()};img.onerror=rej;img.src=r.result};r.onerror=rej;r.readAsDataURL(file)})}
 
@@ -759,20 +763,32 @@ function viewKurz(){
 }
 
 /* ---------- render ---------- */
-let pending=false;
+let pending=false,down=false;
+// Eingaben, die noch nicht gespeichert sind, über ein Neuzeichnen retten (nur wenn sich der gespeicherte Wert nicht geändert hat)
+const isBox=el=>el.type==='checkbox'||el.type==='radio';
+const initial=el=>isBox(el)?el.defaultChecked:el.tagName==='SELECT'?([...el.options].find(o=>o.defaultSelected)||el.options[0]||{}).value:el.defaultValue;
+const current=el=>isBox(el)?el.checked:el.value;
+function drafts(){const o={};document.querySelectorAll('#app input[id],#app textarea[id],#app select[id]').forEach(el=>{if(el.type!=='file'&&!el.dataset.c&&current(el)!==initial(el))o[el.id]={v:current(el),i:initial(el)}});return o}
+function restore(o){Object.entries(o).forEach(([id,d])=>{const el=document.getElementById(id);if(el&&initial(el)===d.i){if(isBox(el))el.checked=d.v;else el.value=d.v}})}
 function render(){
   const a=document.activeElement;
-  if(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)&&!['checkbox','file'].includes(a.type)&&document.getElementById('app').contains(a)){pending=true;return}
+  if(down||a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)&&!['checkbox','file'].includes(a.type)&&document.getElementById('app').contains(a)){pending=true;return}
   pending=false;
+  const keep=drafts();
   const kurz=S.ro||S.kurz,tab=S.ui.tab;
   const views={termine:viewTermine,listen:viewListen,baby:viewBaby,pass:viewPass,settings:viewSettings,wehen:viewWehen,kontakte:viewKontakte};
   const body=S.loading?'<p class="muted" style="padding:40px 0">Lädt …</p>':kurz?viewKurz():(views[tab]||viewHeute)();
   const name=set().nameBaby?esc(set().nameBaby):'Wuzerl';
   document.getElementById('app').innerHTML=`<header class="top"><span class="brand">${name}${S.ro?' <span class="ro-badge">Nur ansehen</span>':''}</span>${kurz?'':`<button class="iconbtn" data-a="tab" data-id="settings" aria-label="Einstellungen">${ICON.gear}</button>`}</header>`+body;
+  restore(keep);
   const nav=document.getElementById('nav');
   if(kurz){nav.innerHTML='';nav.style.display='none'}else{nav.style.display='';const cur=PARENT[tab]||tab;nav.innerHTML='<div class="in">'+TABS.map(([k,l])=>`<button data-a="tab" data-id="${k}" ${k===cur?'aria-current="page"':''}>${ICON[k]}<span>${l}</span></button>`).join('')+'</div>'}
 }
 document.addEventListener('focusout',()=>setTimeout(()=>{if(pending)render()},0));
+// Während ein Finger oder die Maus gedrückt ist, nicht neu zeichnen, sonst geht der Tipp verloren
+document.addEventListener('pointerdown',()=>{down=true},true);
+const up=()=>{down=false;setTimeout(()=>{if(pending)render()},350)};
+document.addEventListener('pointerup',up,true);document.addEventListener('pointercancel',up,true);
 document.addEventListener('input',e=>{if(e.target.id==='ml')S.ui.ml=Math.max(0,Number(e.target.value)||0)});
 document.addEventListener('change',async e=>{
   if(e.target.id==='dPhoto'&&e.target.files&&e.target.files[0]){
@@ -786,6 +802,7 @@ document.addEventListener('change',async e=>{
 /* ---------- actions ---------- */
 const v=id=>{const el=document.getElementById(id);return el?el.value.trim():''};
 const blur=()=>{const a=document.activeElement;if(a&&a.blur)a.blur()};
+const clr=(...ids)=>ids.forEach(id=>{const el=document.getElementById(id);if(el)el.value=el.defaultValue});
 const at=()=>Date.now()-S.ui.offset*60000;
 function arm(act,id,fn){if(S.ui.arm===act+id){S.ui.arm=null;fn()}else{S.ui.arm=act+id;render()}}
 const A={
@@ -816,22 +833,22 @@ const A={
  'offset':id=>{S.ui.offset=Number(id);render()},
  'baby-seg':id=>{S.ui.babySeg=id;render()},
  'log':id=>{const t=at(),o={type:id,at:t,by:me};if(id==='flasche'){const el=document.getElementById('ml');o.ml=Math.max(0,Number(el&&el.value)||0);S.ui.ml=o.ml;blur()}S.ui.offset=0;put('logs',uid(),o);toast(LT[id]+' um '+hm(t)+' eingetragen.')},
- 'sleep':()=>{const st=meta('state');if(st.sleepStart){put('logs',uid(),{type:'schlaf',at:st.sleepStart,end:at(),by:me});putMeta('state',{sleepStart:null})}else putMeta('state',{sleepStart:at()});S.ui.offset=0},
- 'fieber-add':()=>{const tmp=num(v('hTemp'));if(tmp<34||tmp>43)return toast('Bitte eine Temperatur zwischen 34 und 43 °C eingeben.');const t=at();blur();S.ui.offset=0;put('logs',uid(),{type:'fieber',at:t,temp:tmp,by:me});toast('Fieber um '+hm(t)+' eingetragen.')},
- 'medi-add':()=>{const med=v('hMed');if(!med)return toast('Bitte das Medikament eintragen.');const t=at();const o={type:'medi',at:t,med,dose:v('hDose'),note:v('hNote'),by:me};blur();S.ui.offset=0;put('logs',uid(),o);toast('Medikament um '+hm(t)+' eingetragen.')},
+ 'sleep':()=>{const st=meta('state');if(st.sleepStart){put('logs',uid(),{type:'schlaf',at:st.sleepStart,end:Math.max(at(),st.sleepStart),by:me});putMeta('state',{sleepStart:null})}else putMeta('state',{sleepStart:at()});S.ui.offset=0},
+ 'fieber-add':()=>{const tmp=num(v('hTemp'));if(tmp<34||tmp>43)return toast('Bitte eine Temperatur zwischen 34 und 43 °C eingeben.');const t=at();blur();clr('hTemp');S.ui.offset=0;put('logs',uid(),{type:'fieber',at:t,temp:tmp,by:me});toast('Fieber um '+hm(t)+' eingetragen.')},
+ 'medi-add':()=>{const med=v('hMed');if(!med)return toast('Bitte das Medikament eintragen.');const t=at();const o={type:'medi',at:t,med,dose:v('hDose'),note:v('hNote'),by:me};blur();clr('hMed','hDose','hNote');S.ui.offset=0;put('logs',uid(),o);toast('Medikament um '+hm(t)+' eingetragen.')},
  'log-del':id=>arm('log-del',id,()=>del('logs',id)),
  'contr':()=>{const st=meta('state');if(st.contrStart){put('contr','w'+uid(),{start:st.contrStart,end:Date.now(),by:me});putMeta('state',{contrStart:null})}else putMeta('state',{contrStart:Date.now()})},
  'contr-del':id=>arm('contr-del',id,()=>del('contr',id)),
  'contr-clear':()=>arm('contr-clear','all',()=>{arr('contr').forEach(x=>del('contr',x.id))}),
- 'contact-add':()=>{const name=v('cName'),phone=v('cPhone');if(!name||!phone)return toast('Bitte Name und Telefonnummer eingeben.');blur();put('contacts','k'+uid(),{name,role:v('cRole'),phone,created:Date.now()});toast('Kontakt gespeichert.')},
+ 'contact-add':()=>{const name=v('cName'),phone=v('cPhone');if(!name||!phone)return toast('Bitte Name und Telefonnummer eingeben.');blur();clr('cName','cRole','cPhone');put('contacts','k'+uid(),{name,role:v('cRole'),phone,created:Date.now()});toast('Kontakt gespeichert.')},
  'contact-del':id=>arm('contact-del',id,()=>del('contacts',id)),
  'pass-seg':id=>{S.ui.passSeg=id;render()},
  'pass-kind':id=>{S.ui.passKind=id;render()},
  'pass-add':()=>{const title=v('pTitle');if(!title&&!v('pNote')&&!v('pW'))return toast('Bitte zumindest einen Titel oder eine Notiz eingeben.');
-   const o={kind:S.ui.passKind,date:v('pDate'),for:v('pFor')||'kind',title,note:v('pNote'),weight:v('pW'),height:v('pH').replace(',','.'),by:me,created:Date.now()};blur();put('pass','e'+uid(),o);toast('Eintrag gespeichert.')},
+   const o={kind:S.ui.passKind,date:v('pDate'),for:v('pFor')||'kind',title,note:v('pNote'),weight:v('pW'),height:v('pH').replace(',','.'),by:me,created:Date.now()};blur();clr('pDate','pTitle','pW','pH','pNote');put('pass','e'+uid(),o);toast('Eintrag gespeichert.')},
  'pass-del':id=>arm('pass-del',id,()=>del('pass',id)),
  'chart':id=>{S.ui.chart=id;render()},
- 'diary-add':()=>{const text=v('dText');if(!text&&!S.ui.photo)return toast('Bitte einen Text oder ein Foto hinzufügen.');const o={date:v('dDate'),text,photo:S.ui.photo||'',by:me,created:Date.now()};S.ui.photo=null;blur();put('diary','d'+uid(),o);toast('Moment gespeichert.')},
+ 'diary-add':()=>{const text=v('dText');if(!text&&!S.ui.photo)return toast('Bitte einen Text oder ein Foto hinzufügen.');const o={date:v('dDate'),text,photo:S.ui.photo||'',by:me,created:Date.now()};S.ui.photo=null;blur();clr('dDate','dText');put('diary','d'+uid(),o);toast('Moment gespeichert.')},
  'diary-del':id=>arm('diary-del',id,()=>del('diary',id)),
  'vacc':()=>{S.ui.showVacc=true;render()},
  'me':id=>{me=id;try{localStorage.setItem(ME,id)}catch(e){}render()},
@@ -841,7 +858,7 @@ const A={
  'save-settings':()=>{const et=v('sEt'),birth=v('sBirth');const o={...set(),et:pd(et)?et:'',birth:pd(birth)?birth:'',ks:document.getElementById('sKs').checked,nameM:v('sM'),nameP:v('sP'),nameBaby:v('sB'),birthWeight:v('sBw'),birthLength:v('sBl').replace(',','.')};blur();put('meta','settings',o);toast('Einstellungen gespeichert.')}
 };
 document.addEventListener('click',e=>{const el=e.target.closest('[data-a]');if(!el)return;const f=A[el.dataset.a];if(f){e.preventDefault();f(el.dataset.id)}});
-document.addEventListener('keydown',e=>{if(e.key!=='Enter')return;if(e.target.id==='newItem'){e.preventDefault();A['item-add']()}if(e.target.id==='newName'){e.preventDefault();A['name-add']()}});
+document.addEventListener('keydown',e=>{if(e.key!=='Enter')return;if(e.target.id==='newItem'){e.preventDefault();A['item-add']()}if(e.target.id==='newName'){e.preventDefault();A['name-add']()}if(e.target.id==='hTemp'){e.preventDefault();A['fieber-add']()}if(e.target.id==='setupEt'){e.preventDefault();A['setup-et']()}});
 setInterval(()=>{const t=S.ui.tab;if(t==='wehen'&&meta('state').contrStart)render()},1000);
 setInterval(()=>{if(['baby','heute'].includes(S.ui.tab)||S.kurz||S.ro)render()},60000);
 

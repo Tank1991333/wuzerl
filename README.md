@@ -49,6 +49,7 @@ Einträge werden zusammengeführt. Wurde derselbe Eintrag auf beiden Geräten ge
 
 ```
 index.html             die komplette App (HTML, CSS, JavaScript)
+CLAUDE.md              Übergabe für die Weiterentwicklung mit Claude Code
 manifest.webmanifest   Angaben für die Installation am Startbildschirm
 sw.js                  Service Worker für die Offline-Nutzung
 icons/                 App-Icons
