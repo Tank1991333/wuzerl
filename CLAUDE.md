@@ -143,7 +143,7 @@ Screenshots und Exportdateien schreibt der Test in den Temp-Ordner (`OUT=...` zu
 1. `APP_VERSION` in `index.html` erhöhen (SemVer).
 2. `CACHE` in `sw.js` auf denselben Wert setzen, sonst bekommen installierte Apps das Update nicht.
 3. `CHANGELOG.md` ergänzen.
-4. Commit, Tag `vX.Y.Z`, push. GitHub Pages veröffentlicht automatisch.
+4. Commit und push auf `main`. GitHub Pages veröffentlicht automatisch. Das Tag `vX.Y.Z` setzt die GitHub Action `.github/workflows/tag-version.yml` selbst; sie schlägt fehl, wenn `CACHE` in `sw.js` nicht zur `APP_VERSION` passt.
 
 ## Mögliche nächste Schritte (nur nach Rücksprache)
 

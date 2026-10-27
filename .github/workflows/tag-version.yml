@@ -1,0 +1,42 @@
+# Setzt automatisch das Git-Tag vX.Y.Z, sobald auf main eine neue APP_VERSION ankommt.
+# Prüft außerdem, dass CACHE in sw.js zur Version passt (sonst bekommen installierte Apps kein Update).
+name: Version taggen
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Version lesen und prüfen
+        id: v
+        run: |
+          VERSION=$(grep -oP "const APP_VERSION='\K[0-9]+\.[0-9]+\.[0-9]+" index.html)
+          CACHE=$(grep -oP "const CACHE = 'wuzerl-\K[0-9]+\.[0-9]+\.[0-9]+" sw.js)
+          echo "APP_VERSION=$VERSION, CACHE=$CACHE"
+          if [ -z "$VERSION" ]; then echo "::error::APP_VERSION in index.html nicht gefunden"; exit 1; fi
+          if [ "$VERSION" != "$CACHE" ]; then echo "::error::CACHE in sw.js ($CACHE) passt nicht zu APP_VERSION ($VERSION)"; exit 1; fi
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Tag setzen, falls neu
+        run: |
+          TAG=${{ steps.v.outputs.tag }}
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "$TAG gibt es schon, nichts zu tun."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Wuzerl ${TAG#v}"
+          git push origin "$TAG"
+          echo "$TAG gesetzt."
