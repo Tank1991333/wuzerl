@@ -129,7 +129,14 @@ Vor jedem Commit prüfen:
 4. Kalender-Export erzeugt eine gültige .ics-Datei.
 5. Keine Netzwerkanfragen an fremde Domains (DevTools, Reiter Netzwerk).
 
-Für automatisierte Tests eignet sich Playwright, Testdateien nicht ins Repo legen oder in einen eigenen Ordner `tests/`.
+Automatisierter Durchlauf mit Playwright (alle Abläufe, PC 1280 px, iPhone 13, kleines Handy 320 px):
+
+```bash
+python3 -m http.server 8765 &
+node tests/e2e.js          # oder: node tests/e2e.js pc|iphone|klein
+```
+
+Screenshots und Exportdateien schreibt der Test in den Temp-Ordner (`OUT=...` zum Ändern), nie ins Repo. Neue Funktionen bitte dort mit abdecken.
 
 ## Neue Version veröffentlichen
 
