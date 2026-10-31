@@ -1,5 +1,12 @@
 # Änderungen
 
+## 1.1.0 (31. Oktober 2026)
+
+- Zugang nur mit freigeschaltetem Konto: Anmeldung über das Firebase-Projekt vom Ballonflugbuch (gleiche Konten), E-Mail-Bestätigung, Freischaltung durch den Administrator unter Einstellungen → Freischaltung
+- Freischaltung wird je Gerät gemerkt, die App startet auch ohne Netz; gesperrte Konten sind beim nächsten Start mit Netz wieder ausgesperrt
+- Konto-Bereich in den Einstellungen mit Abmelden
+- An Firebase gehen nur E-Mail, Passwort und Freischaltung, keine Einträge; kein Firebase-SDK, nur direkte Aufrufe
+
 ## 1.0.1 (27. Oktober 2026)
 
 Fehlerbehebungen nach einer Prüfung aller Abläufe auf PC und Handy.

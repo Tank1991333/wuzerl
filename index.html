@@ -105,7 +105,7 @@ p{margin:0}
 /* forms */
 label.f{display:block;margin-top:12px;font-size:.9rem;font-weight:700}
 label.f span{display:block;font-weight:400;color:var(--muted);font-size:.82rem}
-input[type=text],input[type=date],input[type=number],input[type=time],select,textarea{width:100%;margin-top:6px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+input[type=text],input[type=email],input[type=password],input[type=date],input[type=number],input[type=time],select,textarea{width:100%;margin-top:6px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
 textarea{min-height:70px;resize:vertical}
 .btn{border:0;border-radius:12px;padding:12px 18px;font-weight:700;background:var(--ink);color:var(--bg)}
 .btn.ghost{background:var(--sunk);color:var(--ink)}
@@ -203,7 +203,7 @@ const val=(v,ks)=>typeof v==='function'?v(ks):v;
 const num=s=>{const n=Number(String(s||'').replace(',','.'));return isFinite(n)?n:0};
 
 /* ---------- store: nur auf diesem Gerät (IndexedDB) ---------- */
-const APP_VERSION='1.0.1';
+const APP_VERSION='1.1.0';
 const LK='unserbaby:v1',ME='unserbaby:me',KURZ='unserbaby:kurz',SYNC='unserbaby:sync';
 const COLLS=['meta','checks','logs','pass','appts','contr','names','contacts','diary'];
 const blank=()=>Object.fromEntries(COLLS.map(c=>[c,{}]));
@@ -744,6 +744,7 @@ function viewSettings(){
   <h2>Für Großeltern und Babysitter</h2>
   <p class="small muted">Die Kurzansicht zeigt nur Alter, letzte Mahlzeit, Schlaf, Termine und wichtige Nummern. Auf ihrem Handy die App öffnen, eure Datei importieren und die Kurzansicht einschalten.</p>
   <div class="toggle"><input type="checkbox" id="sKurz" data-c="kurz" ${S.kurz?'checked':''}><label for="sKurz">Kurzansicht auf diesem Gerät verwenden</label></div>
+  ${viewKonto()}
   <h2>Daten löschen</h2>
   <p class="small muted">Löscht alle Einträge auf diesem Handy. Vorher am besten eine Sicherung teilen.</p>
   <p style="margin-top:8px">${S.ui.arm==='wipeall'?'<button class="btn" style="background:var(--warn)" data-a="wipe">Ja, alles auf diesem Handy löschen</button>':'<button class="btn ghost" data-a="wipe">Alle Daten löschen</button>'}</p>
@@ -762,6 +763,109 @@ function viewKurz(){
   return h;
 }
 
+/* ---------- Zugang: Anmeldung als Eingangstür (Firebase-Projekt vom Ballonflugbuch) ---------- */
+// An Firebase gehen nur E-Mail, Passwort und die Freischaltung. Eure Einträge bleiben auf dem Gerät.
+// Die Sperre ist eine Eingangstür, kein Datenschutz: die Daten liegen ohnehin nur lokal.
+const FB={apiKey:'AIzaSyCgQwA9X_tIVkLly9IymH8VIIB4BdjmJYE',projectId:'ballonflugbuch',adminUid:'ahg4hJgbbcflgWxyerVdW7O0vvO2'};
+const AUTH='unserbaby:auth',ZUGANG='unserbaby:zugang';
+const IT='https://identitytoolkit.googleapis.com/v1/accounts:',FS='https://firestore.googleapis.com/v1/projects/'+FB.projectId+'/databases/(default)/documents/';
+const gateOn=!!FB.apiKey&&!window.claude;
+const Z={state:null,busy:false,msg:'',err:false,user:null,tok:null,exp:0,adm:null};
+const lsGet=k=>{try{return localStorage.getItem(k)}catch(e){return null}};
+const lsSet=(k,x)=>{try{x==null?localStorage.removeItem(k):localStorage.setItem(k,x)}catch(e){}};
+try{Z.user=JSON.parse(lsGet(AUTH)||'null')}catch(e){}
+if(gateOn)Z.state=!Z.user?'login':lsGet(ZUGANG)===Z.user.uid?null:'laden';
+const isAdmin=()=>!!(Z.user&&Z.user.uid===FB.adminUid);
+async function fbPost(url,body,form){
+  const r=await fetch(url,{method:'POST',headers:{'Content-Type':form?'application/x-www-form-urlencoded':'application/json'},body:form?new URLSearchParams(body):JSON.stringify(body)});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok){const m=String((j.error&&j.error.message)||r.status),e=new Error(m);e.code=m.split(/[ :]/)[0];throw e}
+  return j;
+}
+const claims=t=>{try{return JSON.parse(decodeURIComponent(escape(atob(t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')))))}catch(e){return {}}};
+function session(j){
+  const tok=j.idToken||j.id_token,c=claims(tok);
+  Z.user={uid:j.localId||j.user_id||c.user_id,email:c.email||j.email||(Z.user&&Z.user.email)||'',rt:j.refreshToken||j.refresh_token};
+  Z.tok=tok;Z.exp=Date.now()+(Number(j.expiresIn||j.expires_in)||3600)*1000-60000;
+  lsSet(AUTH,JSON.stringify(Z.user));
+}
+async function token(force){
+  if(!force&&Z.tok&&Date.now()<Z.exp)return Z.tok;
+  session(await fbPost('https://securetoken.googleapis.com/v1/token?key='+FB.apiKey,{grant_type:'refresh_token',refresh_token:Z.user.rt},true));
+  return Z.tok;
+}
+async function fsReq(method,path,fields){
+  const r=await fetch(FS+path,{method,headers:{Authorization:'Bearer '+await token(),'Content-Type':'application/json'},body:fields?JSON.stringify({fields}):undefined});
+  if(r.status===404)return null;
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok){const e=new Error('Firestore '+r.status);e.code=r.status===403?'PERMISSION_DENIED':'HTTP_'+r.status;throw e}
+  return j;
+}
+const zText=e=>{const c=e&&e.code;
+  if(!c)return 'Keine Verbindung zum Anmeldedienst. Bitte Internet prüfen.';
+  if(['INVALID_LOGIN_CREDENTIALS','INVALID_PASSWORD','EMAIL_NOT_FOUND'].includes(c))return 'E-Mail oder Passwort stimmt nicht.';
+  if(c==='EMAIL_EXISTS')return 'Für diese E-Mail gibt es schon ein Konto (auch eines vom Ballonflugbuch zählt). Bitte anmelden.';
+  if(c==='INVALID_EMAIL')return 'Bitte eine gültige E-Mail-Adresse eingeben.';
+  if(c==='WEAK_PASSWORD'||c==='PASSWORD_DOES_NOT_MEET_REQUIREMENTS')return 'Das Passwort ist zu schwach. Bitte mindestens 8 Zeichen.';
+  if(c==='TOO_MANY_ATTEMPTS_TRY_LATER')return 'Zu viele Versuche. Bitte später noch einmal.';
+  if(c==='USER_DISABLED')return 'Dieses Konto ist gesperrt.';
+  return 'Das hat nicht geklappt ('+c+').'};
+function zMsg(m,err){Z.msg=m||'';Z.err=!!err;Z.busy=false;render()}
+function offen(){lsSet(ZUGANG,Z.user.uid);Z.state=null;Z.msg='';Z.busy=false;render()}
+function sperre(s,m){lsSet(ZUGANG,null);Z.state=s;Z.busy=false;Z.msg=m||'';Z.err=false;render()}
+function abmelden(m){lsSet(AUTH,null);lsSet(ZUGANG,null);Z.user=null;Z.tok=null;Z.adm=null;Z.state='login';zMsg(m||'',!!m)}
+// Prüft Bestätigung und Freischaltung. Gesperrt wird nur bei eindeutigem Ergebnis, ohne Netz bleibt eine gemerkte Freischaltung gültig.
+async function pruefen(){
+  if(!gateOn)return;
+  if(!Z.user)return abmelden();
+  try{
+    const c=claims(await token(true));
+    if(isAdmin())return offen();
+    if(!c.email_verified)return sperre('bestaetigen');
+    if(await fsReq('GET','wuzerl_freigaben/'+Z.user.uid))return offen();
+    await fsReq('PATCH','wuzerl_anfragen/'+Z.user.uid,{email:{stringValue:c.email||Z.user.email},zeit:{integerValue:String(Date.now())}});
+    sperre('warten');
+  }catch(e){
+    if(['INVALID_REFRESH_TOKEN','TOKEN_EXPIRED','USER_DISABLED','USER_NOT_FOUND','INVALID_ID_TOKEN'].includes(e.code))return abmelden('Bitte neu anmelden.');
+    if(e.code==='PERMISSION_DENIED')return sperre('warten');
+    if(Z.state)zMsg(zText(e),true);
+  }
+}
+async function zAct(fn){if(Z.busy)return;blur();Z.busy=true;Z.msg='';render();try{await fn()}catch(e){zMsg(zText(e),true)}}
+const fsDocs=x=>((x&&x.documents)||[]).map(d=>{const f=d.fields||{};return {uid:d.name.split('/').pop(),email:(f.email&&f.email.stringValue)||'',zeit:Number(f.zeit&&f.zeit.integerValue)||0}}).sort((a,b)=>b.zeit-a.zeit);
+async function admLaden(){const [a,f]=await Promise.all([fsReq('GET','wuzerl_anfragen?pageSize=100'),fsReq('GET','wuzerl_freigaben?pageSize=100')]);Z.adm={a:fsDocs(a),f:fsDocs(f)};render()}
+function viewGate(){
+  const m=Z.msg?`<p class="small" role="alert" style="margin-top:12px;${Z.err?'color:var(--warn);font-weight:700':''}">${esc(Z.msg)}</p>`:'';
+  const dis=Z.busy?' disabled aria-busy="true"':'',mail=esc(Z.user&&Z.user.email||'');
+  let h=`<section class="hero"><p class="kicker">Willkommen bei</p><p class="big" style="font-size:clamp(40px,12vw,64px)">Wuzerl</p><p class="sub">Nur mit freigeschaltetem Konto.</p></section><div class="card" style="margin-top:12px">`;
+  if(Z.state==='login')h+=`<h3>Anmelden</h3>
+   <label class="f">E-Mail<input type="email" id="zMail" autocomplete="username" inputmode="email" maxlength="120"></label>
+   <label class="f">Passwort<input type="password" id="zPw" autocomplete="current-password" maxlength="100"></label>
+   <button class="btn block" data-a="z-login"${dis}>Anmelden</button>
+   <div class="grid2" style="margin-top:10px"><button class="btn ghost" data-a="z-neu"${dis}>Konto anlegen</button><button class="btn ghost" data-a="z-reset"${dis}>Passwort vergessen</button></div>
+   <p class="small muted" style="margin-top:12px">Es gilt dasselbe Konto wie im Ballonflugbuch. Neue Konten müssen erst freigeschaltet werden. Eure Einträge bleiben trotzdem nur auf diesem Gerät.</p>`;
+  else if(Z.state==='bestaetigen')h+=`<h3>E-Mail bestätigen</h3><p class="small" style="margin-top:6px">Wir haben einen Bestätigungslink an <b>${mail}</b> geschickt. Bitte auch im Spam-Ordner nachsehen. Danach hier weitertippen.</p>
+   <button class="btn block" data-a="z-check"${dis}>Ich habe bestätigt</button>
+   <div class="grid2" style="margin-top:10px"><button class="btn ghost" data-a="z-mail"${dis}>E-Mail erneut senden</button><button class="btn ghost" data-a="z-out"${dis}>Abmelden</button></div>`;
+  else if(Z.state==='warten')h+=`<h3>Wartet auf Freischaltung</h3><p class="small" style="margin-top:6px">Das Konto <b>${mail}</b> ist angelegt und die Anfrage ist gesendet. Sobald es freigeschaltet ist, geht es hier weiter.</p>
+   <button class="btn block" data-a="z-check"${dis}>Erneut prüfen</button>
+   <p style="margin-top:10px"><button class="linkish" data-a="z-out">Abmelden</button></p>`;
+  else h+=`<p class="small">Zugang wird geprüft …</p>${Z.msg?`<button class="btn block" data-a="z-check"${dis}>Erneut versuchen</button><p style="margin-top:10px"><button class="linkish" data-a="z-out">Abmelden</button></p>`:''}`;
+  return h+m+`</div>`;
+}
+function viewKonto(){
+  if(!gateOn||!Z.user)return '';
+  let h=`<h2>Konto</h2><p class="small muted">Angemeldet als ${esc(Z.user.email)}. Abmelden sperrt die App auf diesem Gerät, eure Einträge bleiben gespeichert.</p>
+   <p style="margin-top:8px"><button class="btn ghost" data-a="z-out">Abmelden</button></p>`;
+  if(!isAdmin())return h;
+  h+=`<h2>Freischaltung</h2><p class="small muted">Nur für dich sichtbar. Wer ein Konto anlegt und die E-Mail bestätigt, erscheint hier.</p>`;
+  if(!Z.adm)return h+`<p style="margin-top:8px"><button class="btn ghost" data-a="z-adm">Anfragen laden</button></p>`;
+  const row=(x,btns)=>`<div class="row"><div class="main"><div class="title">${esc(x.email||x.uid)}</div><div class="meta">${x.zeit?`<span>${esc(fmt(new Date(x.zeit)))}</span>`:''}${btns}</div></div></div>`;
+  h+=`<h3 style="margin-top:12px">Offene Anfragen</h3>`+(Z.adm.a.length?`<div class="list" style="margin-top:6px">`+Z.adm.a.map(x=>row(x,`<button class="btn" style="padding:6px 12px" data-a="z-ok" data-id="${esc(x.uid)}">Freischalten</button><button class="del" data-a="z-nein" data-id="${esc(x.uid)}">Ablehnen</button>`)).join('')+`</div>`:`<div class="card empty" style="margin-top:6px">Keine offenen Anfragen.</div>`);
+  h+=`<h3 style="margin-top:12px">Freigeschaltet</h3>`+(Z.adm.f.length?`<div class="list" style="margin-top:6px">`+Z.adm.f.map(x=>row(x,delBtn('z-sperr',x.uid).replace('>Löschen<','>Sperren<'))).join('')+`</div>`:`<div class="card empty" style="margin-top:6px">Noch niemand.</div>`);
+  return h+`<p style="margin-top:8px"><button class="linkish" data-a="z-adm">Aktualisieren</button></p>`;
+}
+
 /* ---------- render ---------- */
 let pending=false,down=false;
 // Eingaben, die noch nicht gespeichert sind, über ein Neuzeichnen retten (nur wenn sich der gespeicherte Wert nicht geändert hat)
@@ -775,6 +879,10 @@ function render(){
   if(down||a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)&&!['checkbox','file'].includes(a.type)&&document.getElementById('app').contains(a)){pending=true;return}
   pending=false;
   const keep=drafts();
+  if(Z.state){ // Eingangstür: ohne Freischaltung nichts von der App zeigen
+    document.getElementById('app').innerHTML=`<header class="top"><span class="brand">Wuzerl</span></header>`+viewGate();restore(keep);
+    const nav=document.getElementById('nav');nav.innerHTML='';nav.style.display='none';return;
+  }
   const kurz=S.ro||S.kurz,tab=S.ui.tab;
   const views={termine:viewTermine,listen:viewListen,baby:viewBaby,pass:viewPass,settings:viewSettings,wehen:viewWehen,kontakte:viewKontakte};
   const body=S.loading?'<p class="muted" style="padding:40px 0">Lädt …</p>':kurz?viewKurz():(views[tab]||viewHeute)();
@@ -855,10 +963,24 @@ const A={
  'share':()=>shareData(),
  'wipe':()=>{if(S.ui.arm==='wipeall'){S.ui.arm=null;S.d=blank();saveNow();render();toast('Alle Daten auf diesem Handy wurden gelöscht.')}else{S.ui.arm='wipeall';render()}},
  'kurz-off':()=>{S.kurz=false;try{localStorage.setItem(KURZ,'0')}catch(e){}render()},
+ 'z-login':()=>zAct(async()=>{const email=v('zMail'),pw=document.getElementById('zPw').value;if(!email||!pw)return zMsg('Bitte E-Mail und Passwort eingeben.',true);
+   session(await fbPost(IT+'signInWithPassword?key='+FB.apiKey,{email,password:pw,returnSecureToken:true}));Z.state='laden';await pruefen()}),
+ 'z-neu':()=>zAct(async()=>{const email=v('zMail'),pw=document.getElementById('zPw').value;if(!email||pw.length<8)return zMsg('Bitte E-Mail und ein Passwort mit mindestens 8 Zeichen eingeben.',true);
+   session(await fbPost(IT+'signUp?key='+FB.apiKey,{email,password:pw,returnSecureToken:true}));
+   await fbPost(IT+'sendOobCode?key='+FB.apiKey,{requestType:'VERIFY_EMAIL',idToken:Z.tok}).catch(()=>{});sperre('bestaetigen')}),
+ 'z-reset':()=>zAct(async()=>{const email=v('zMail');if(!email)return zMsg('Bitte zuerst die E-Mail-Adresse eingeben.',true);
+   await fbPost(IT+'sendOobCode?key='+FB.apiKey,{requestType:'PASSWORD_RESET',email});zMsg('Falls es ein Konto gibt, ist ein Link zum Zurücksetzen unterwegs. Bitte auch im Spam-Ordner nachsehen.')}),
+ 'z-mail':()=>zAct(async()=>{await fbPost(IT+'sendOobCode?key='+FB.apiKey,{requestType:'VERIFY_EMAIL',idToken:await token()});zMsg('Die E-Mail wurde erneut gesendet.')}),
+ 'z-check':()=>zAct(async()=>{await pruefen();if(Z.state==='bestaetigen'&&!Z.msg)zMsg('Die E-Mail ist noch nicht bestätigt.',true);else if(Z.state==='warten'&&!Z.msg)zMsg('Noch nicht freigeschaltet.')}),
+ 'z-out':()=>{abmelden()},
+ 'z-adm':async()=>{try{await admLaden()}catch(e){toast(e.code==='PERMISSION_DENIED'?'Keine Berechtigung. Sind die Firestore-Regeln für Wuzerl veröffentlicht?':zText(e))}},
+ 'z-ok':async id=>{const x=(Z.adm&&Z.adm.a.find(a=>a.uid===id))||{};try{await fsReq('PATCH','wuzerl_freigaben/'+id,{email:{stringValue:x.email||''},zeit:{integerValue:String(Date.now())}});await fsReq('DELETE','wuzerl_anfragen/'+id);toast('Freigeschaltet.');await admLaden()}catch(e){toast(zText(e))}},
+ 'z-nein':async id=>{try{await fsReq('DELETE','wuzerl_anfragen/'+id);await admLaden()}catch(e){toast(zText(e))}},
+ 'z-sperr':id=>arm('z-sperr',id,async()=>{try{await fsReq('DELETE','wuzerl_freigaben/'+id);toast('Zugang gesperrt.');await admLaden()}catch(e){toast(zText(e))}}),
  'save-settings':()=>{const et=v('sEt'),birth=v('sBirth');const o={...set(),et:pd(et)?et:'',birth:pd(birth)?birth:'',ks:document.getElementById('sKs').checked,nameM:v('sM'),nameP:v('sP'),nameBaby:v('sB'),birthWeight:v('sBw'),birthLength:v('sBl').replace(',','.')};blur();put('meta','settings',o);toast('Einstellungen gespeichert.')}
 };
 document.addEventListener('click',e=>{const el=e.target.closest('[data-a]');if(!el)return;const f=A[el.dataset.a];if(f){e.preventDefault();f(el.dataset.id)}});
-document.addEventListener('keydown',e=>{if(e.key!=='Enter')return;if(e.target.id==='newItem'){e.preventDefault();A['item-add']()}if(e.target.id==='newName'){e.preventDefault();A['name-add']()}if(e.target.id==='hTemp'){e.preventDefault();A['fieber-add']()}if(e.target.id==='setupEt'){e.preventDefault();A['setup-et']()}});
+document.addEventListener('keydown',e=>{if(e.key!=='Enter')return;if(e.target.id==='newItem'){e.preventDefault();A['item-add']()}if(e.target.id==='newName'){e.preventDefault();A['name-add']()}if(e.target.id==='hTemp'){e.preventDefault();A['fieber-add']()}if(e.target.id==='setupEt'){e.preventDefault();A['setup-et']()}if(e.target.id==='zPw'||e.target.id==='zMail'){e.preventDefault();A['z-login']()}});
 setInterval(()=>{const t=S.ui.tab;if(t==='wehen'&&meta('state').contrStart)render()},1000);
 setInterval(()=>{if(['baby','heute'].includes(S.ui.tab)||S.kurz||S.ro)render()},60000);
 
@@ -866,6 +988,9 @@ setInterval(()=>{if(['baby','heute'].includes(S.ui.tab)||S.kurz||S.ro)render()},
 if('serviceWorker' in navigator&&location.protocol==='https:'&&!window.claude){window.addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{})})}
 render();
 load();
+// Freischaltung im Hintergrund prüfen (beim Start mit Netz, und sobald wieder Netz da ist)
+if(gateOn&&Z.user&&navigator.onLine!==false)pruefen();
+window.addEventListener('online',()=>{if(gateOn&&Z.user)pruefen()});
 if(window.claude&&typeof window.claude.use==='function')window.claude.use('downloads').then(d=>{if(d){S.dl=d;render()}}).catch(()=>{});
 })();
 </script>

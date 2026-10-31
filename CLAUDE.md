@@ -6,12 +6,12 @@
 
 Wuzerl ist eine private Web-App für ein Paar in Österreich: Schwangerschaft, Babyzeit und erste Kleinkindjahre organisieren. Nutzer sind die beiden Eltern (Rollen „M“ = Mama, „P“ = Partner:in), optional Großeltern über eine Kurzansicht. Kein Produkt für Dritte.
 
-Aktuelle Version: **1.0.1** (`APP_VERSION` in `index.html`, `CACHE` in `sw.js`).
+Aktuelle Version: **1.1.0** (`APP_VERSION` in `index.html`, `CACHE` in `sw.js`).
 
 ## Harte Regeln (nicht verhandelbar)
 
-1. **Keine Daten verlassen das Gerät.** Kein Backend, keine Cloud, kein Analytics, kein Tracking, keine Fehlerberichte an Dritte.
-2. **Keine externen Ressourcen zur Laufzeit.** Keine CDNs, keine Google Fonts, keine externen Bilder. Alles liegt im Repo. Systemschriften verwenden.
+1. **Keine Daten verlassen das Gerät.** Kein Backend, keine Cloud, kein Analytics, kein Tracking, keine Fehlerberichte an Dritte. Einzige Ausnahme ist der Zugang (siehe unten): Firebase bekommt nur E-Mail, Passwort und Freischaltung, nie Einträge der App.
+2. **Keine externen Ressourcen zur Laufzeit.** Keine CDNs, keine Google Fonts, keine externen Bilder, auch kein Firebase-SDK. Alles liegt im Repo. Systemschriften verwenden. Netzverkehr nur zu `identitytoolkit`, `securetoken` und `firestore.googleapis.com` für den Zugang.
 3. **Keine Nutzerdaten im Repository.** Exportdateien (`wuzerl-*.json`, `unser-baby-*.json`, `*.ics`) stehen in `.gitignore`.
 4. **Abgleich nur per Datei** von Gerät zu Gerät (Web Share API, sonst Download). Ein späterer automatischer Abgleich wäre nur selbst gehostet denkbar (z. B. Raspberry Pi im Heimnetz) und muss vorher mit dem Nutzer abgesprochen werden.
 5. **Rückwärtskompatibilität:** Gespeicherte Daten und Exportdateien älterer Versionen müssen weiter funktionieren. Speicher-Schlüssel und Datenbankname nicht umbenennen (siehe unten, sie heißen aus historischen Gründen noch `unserbaby`/`unser-baby`).
@@ -48,7 +48,8 @@ Die Datei ist mit Kommentaren `/* ---------- name ---------- */` gegliedert:
 | checklists | `LISTS` mit Standard-Checklisten |
 | tracker | Log-Typen (`LT`), Gesundheitstypen (`HEALTH`) |
 | views | je Ansicht eine Funktion `viewXxx()`, die einen HTML-String liefert |
-| render | baut `#app` und `#nav` neu auf |
+| Zugang | Anmeldung als Eingangstür: `FB` (Firebase-Projekt vom Ballonflugbuch), `pruefen`, `viewGate`, `viewKonto` (inkl. Freischaltung für den Admin) |
+| render | baut `#app` und `#nav` neu auf, zeigt bei `Z.state` nur die Anmeldung |
 | actions | Objekt `A`: alle Klick-Aktionen über `data-a` und `data-id` |
 | start | Service Worker, `load()`, optional `claude.use('downloads')` |
 
@@ -94,6 +95,16 @@ Regeln:
 
 Import akzeptiert `app` = `wuzerl` und das alte `unser-baby`. Zusammenführen pro Dokument: das mit dem höheren `_u` gewinnt. Bei Formatänderungen `version` erhöhen und eine Migration in `importFile`/`load` ergänzen.
 
+## Zugang (seit 1.1.0)
+
+- Firebase-Projekt `ballonflugbuch` (gleiche Konten wie das Ballonflugbuch), angesprochen direkt über die REST-Schnittstellen, ohne SDK. `adminUid` in `FB` ist der Administrator.
+- Ablauf: Anmelden bzw. Konto anlegen → E-Mail bestätigen → Anfrage in `wuzerl_anfragen/{uid}` (`email`, `zeit`) → Admin legt `wuzerl_freigaben/{uid}` an (Einstellungen → Freischaltung). Getrennt von `anfragen`/`freigaben` des Ballonflugbuchs.
+- `Z.state`: `login`, `bestaetigen`, `warten`, `laden` oder `null` (offen). Pro Gerät in `localStorage`: `unserbaby:auth` (uid, E-Mail, Refresh-Token) und `unserbaby:zugang` (uid, wenn freigeschaltet).
+- Gesperrt wird nur bei eindeutigem Ergebnis (keine Freigabe, Konto ungültig). Ohne Netz bleibt die gemerkte Freischaltung gültig.
+- Im claude.ai-Artifact (`window.claude`) ist die Tür aus (`gateOn`).
+- Die Firestore-Regeln stehen im README und müssen in der Firebase-Konsole veröffentlicht sein.
+- Tests simulieren Firebase in `tests/fakefb.js`, es geht nichts ins Netz.
+
 ## Fristen und Inhalte (`DEFS`)
 
 Jeder Eintrag: `id` (stabil, nie ändern, sonst gehen Häkchen verloren), `p` (preg/baby), `b` (Basis: `lmp` = Termin minus 280 Tage, `et` = Termin, `birth` = Geburt bzw. Termin als Schätzung), `s`/`e` (Tage relativ zur Basis, Zahl oder Funktion von `ks`), `w` (Standard-Zuständigkeit), `tag`, `t` (Titel), `i` (Erklärung), `ms` (Meilenstein, nicht abhakbar).
@@ -127,7 +138,7 @@ Vor jedem Commit prüfen:
 2. Ablauf im Browser: Geburtstermin setzen, alle Tabs öffnen, Eintrag anlegen und löschen, Seite neu laden (Daten bleiben).
 3. Abgleich mit zwei Browser-Profilen: auf A exportieren, auf B importieren, Löschungen kommen mit.
 4. Kalender-Export erzeugt eine gültige .ics-Datei.
-5. Keine Netzwerkanfragen an fremde Domains (DevTools, Reiter Netzwerk).
+5. Keine Netzwerkanfragen an fremde Domains (DevTools, Reiter Netzwerk), außer den drei Firebase-Adressen für den Zugang.
 
 Automatisierter Durchlauf mit Playwright (alle Abläufe, PC 1280 px, iPhone 13, kleines Handy 320 px):
 

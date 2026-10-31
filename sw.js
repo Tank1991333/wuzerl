@@ -1,7 +1,7 @@
 // Service Worker: macht die App offline nutzbar.
 // Speichert nur die App-Dateien, niemals eure Einträge.
 // Bei einer neuen Version CACHE hochzählen.
-const CACHE = 'wuzerl-1.0.1';
+const CACHE = 'wuzerl-1.1.0';
 const FILES = ['./', './index.html', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png', './icons/apple-touch-icon.png'];
 

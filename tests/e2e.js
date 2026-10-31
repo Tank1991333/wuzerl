@@ -3,6 +3,7 @@
 // Screenshots und Exportdateien landen außerhalb des Repos (OUT, Standard: Temp-Ordner).
 const { chromium, devices } = require('playwright');
 const fs = require('fs'), path = require('path');
+const { createFake, ADMIN } = require('./fakefb');
 const URL_ = process.env.URL || 'http://localhost:8765/';
 const OUT = process.env.OUT || path.join(require('os').tmpdir(), 'wuzerl-tests');
 fs.mkdirSync(OUT, { recursive: true });
@@ -28,11 +29,15 @@ let browser;
 async function run(label, ctxOpts) {
   browser = await chromium.launch();
   const ctx = await browser.newContext({ ...ctxOpts, acceptDownloads: true, locale: 'de-AT' });
+  // Angemeldet und freigeschaltet (Firebase simuliert, siehe fakefb.js)
+  const fb = createFake(), mama = fb.addUser('mama@example.at', 'geheim123');
+  fb.freigaben[mama.uid] = { email: mama.email, zeit: Date.now() };
+  await fb.install(ctx); await fb.loginInit(ctx, mama);
   const page = await ctx.newPage(); page.setDefaultTimeout(8000);
   const errors = [], foreign = [];
   page.on('pageerror', e => errors.push(e.message));
   page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
-  page.on('request', r => { if (!r.url().startsWith(URL_) && !r.url().startsWith('data:') && !r.url().startsWith('blob:')) foreign.push(r.url()); });
+  page.on('request', r => { const u = r.url(); if (!u.startsWith(URL_) && !u.startsWith('data:') && !u.startsWith('blob:') && !/^https:\/\/(identitytoolkit|securetoken|firestore)\.googleapis\.com\//.test(u)) foreign.push(u); });
   await page.goto(URL_); await page.waitForSelector('.hero');
   const L = s => label + ': ' + s;
   const shot = async n => page.screenshot({ path: path.join(OUT, label + '-' + n + '.png'), fullPage: true });
@@ -148,7 +153,7 @@ async function run(label, ctxOpts) {
   await act(page, 'tab', 'settings');
   const [ex] = await Promise.all([page.waitForEvent('download'), act(page, 'share')]);
   const expPath = path.join(OUT, label + '-export.json'); await ex.saveAs(expPath);
-  const ctx2 = await browser.newContext({ ...ctxOpts, locale: 'de-AT' }); const p2 = await ctx2.newPage(); p2.setDefaultTimeout(8000);
+  const ctx2 = await browser.newContext({ ...ctxOpts, locale: 'de-AT' }); await fb.install(ctx2); await fb.loginInit(ctx2, mama); const p2 = await ctx2.newPage(); p2.setDefaultTimeout(8000);
   p2.on('pageerror', e => errors.push('B: ' + e.message));
   await p2.goto(URL_); await p2.waitForSelector('.hero'); await act(p2, 'tab', 'settings');
   await p2.setInputFiles('#importFile', expPath); await p2.waitForTimeout(300);
@@ -181,7 +186,70 @@ async function run(label, ctxOpts) {
   ok(L('Alles löschen'), await page.locator('#setupEt').count() === 0 ? (await act(page, 'tab', 'heute'), await page.locator('#setupEt').count() === 1) : true);
 
   ok(L('Keine JS-Fehler'), !errors.length, errors.join(' | '));
+  ok(L('Keine App-Daten an Firebase'), !fb.calls.some(c => /documents\/(?!wuzerl_)/.test(c)), fb.calls.join(' '));
   ok(L('Keine fremden Netzwerkanfragen'), !foreign.length, foreign.join(' '));
+  await browser.close();
+}
+
+// Zugang: Konto anlegen, bestätigen, auf Freischaltung warten, freischalten, offline starten, sperren, Admin-Ansicht
+async function runGate(label, ctxOpts) {
+  browser = await chromium.launch();
+  const L = s => label + ': Zugang ' + s, fb = createFake();
+  const admin = fb.addUser('admin@example.at', 'adminpass1', { uid: ADMIN });
+  const ctx = await browser.newContext({ ...ctxOpts, locale: 'de-AT' }); await fb.install(ctx);
+  const page = await ctx.newPage(); page.setDefaultTimeout(8000);
+  const errors = []; page.on('pageerror', e => errors.push(e.message));
+  const shot = async n => page.screenshot({ path: path.join(OUT, label + '-zugang-' + n + '.png'), fullPage: true });
+  const chk = async n => { const o = await overflow(page); ok(L('kein Querscrollen ' + n), o.sw <= o.W && !o.bad.length, JSON.stringify(o)); };
+  const txt = () => page.locator('#app').innerText();
+  await page.goto(URL_); await page.waitForSelector('#zMail');
+  ok(L('gesperrt ohne Anmeldung'), await page.locator('#nav').isHidden() && !(await txt()).includes('Als Nächstes'));
+  await chk('Anmelden'); await shot('1-login');
+  await page.fill('#zMail', 'oma@example.at'); await page.fill('#zPw', 'falsch1234'); await act(page, 'z-login');
+  ok(L('falsches Passwort'), (await txt()).includes('stimmt nicht'));
+  await page.fill('#zPw', 'kurz'); await act(page, 'z-neu');
+  ok(L('Passwort zu kurz'), (await txt()).includes('mindestens 8 Zeichen'));
+  await page.fill('#zPw', 'omapass123'); await act(page, 'z-neu');
+  await page.waitForSelector('[data-a="z-mail"]');
+  ok(L('Konto anlegen -> E-Mail bestätigen'), (await txt()).includes('oma@example.at')); await chk('Bestätigen'); await shot('2-bestaetigen');
+  await act(page, 'z-check'); ok(L('unbestätigt bleibt gesperrt'), (await txt()).includes('noch nicht bestätigt'));
+  fb.users['oma@example.at'].verified = true;
+  await act(page, 'z-check'); await page.waitForSelector('text=Wartet auf Freischaltung');
+  const oma = fb.users['oma@example.at'];
+  ok(L('Anfrage gesendet'), fb.anfragen[oma.uid] && fb.anfragen[oma.uid].email === 'oma@example.at'); await chk('Warten'); await shot('3-warten');
+  await page.reload(); await page.waitForSelector('text=Wartet auf Freischaltung');
+  ok(L('nach Neuladen weiter gesperrt'), await page.locator('#nav').isHidden());
+
+  // Admin auf einem zweiten Gerät schaltet frei
+  const actx = await browser.newContext({ ...ctxOpts, locale: 'de-AT' }); await fb.install(actx);
+  const ap = await actx.newPage(); ap.setDefaultTimeout(8000); ap.on('pageerror', e => errors.push('Admin: ' + e.message));
+  await ap.goto(URL_); await ap.fill('#zMail', 'admin@example.at'); await ap.fill('#zPw', 'adminpass1'); await ap.press('#zPw', 'Enter');
+  await ap.waitForSelector('#nav button'); ok(L('Admin kommt ohne Freischaltung hinein'), await ap.locator('#nav').isVisible());
+  await act(ap, 'tab', 'settings'); await act(ap, 'z-adm'); await ap.waitForSelector('[data-a="z-ok"]');
+  ok(L('Admin sieht Anfrage'), (await ap.locator('#app').innerText()).includes('oma@example.at'));
+  { const o = await overflow(ap); ok(L('kein Querscrollen Freischaltung'), o.sw <= o.W && !o.bad.length, JSON.stringify(o)); }
+  await ap.screenshot({ path: path.join(OUT, label + '-zugang-4-admin.png'), fullPage: true });
+  await act(ap, 'z-ok', oma.uid); await ap.waitForTimeout(200);
+  ok(L('Freischalten'), !!fb.freigaben[oma.uid] && !fb.anfragen[oma.uid]);
+
+  await act(page, 'z-check'); await page.waitForSelector('#nav button');
+  ok(L('nach Freischaltung offen'), await page.locator('#nav').isVisible());
+  fb.offline = true; await page.reload(); await page.waitForSelector('#nav button');
+  ok(L('ohne Netz startet die App mit gemerkter Freischaltung'), await page.locator('#nav').isVisible());
+  fb.offline = false;
+
+  // Admin sperrt wieder
+  await act(ap, 'z-sperr', oma.uid); await act(ap, 'z-sperr', oma.uid); await ap.waitForTimeout(200);
+  ok(L('Sperren'), !fb.freigaben[oma.uid]);
+  await page.reload(); await page.waitForSelector('text=Wartet auf Freischaltung');
+  ok(L('gesperrtes Konto ist beim nächsten Start wieder gesperrt'), await page.locator('#nav').isHidden());
+  await act(page, 'z-out'); await page.waitForSelector('#zMail');
+  ok(L('Abmelden'), await page.locator('#zMail').isVisible());
+
+  // Admin meldet sich ab: Daten bleiben, App gesperrt
+  await act(ap, 'z-out'); await ap.waitForSelector('#zMail');
+  ok(L('Admin abmelden sperrt'), await ap.locator('#nav').isHidden());
+  ok(L('Keine JS-Fehler'), !errors.length, errors.join(' | '));
   await browser.close();
 }
 
@@ -190,6 +258,7 @@ async function run(label, ctxOpts) {
   const sets = { pc: { viewport: { width: 1280, height: 800 } }, iphone: devices['iPhone 13'], klein: { viewport: { width: 320, height: 568 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 } };
   for (const [k, o] of Object.entries(sets)) if (which === 'all' || which === k) {
     const { defaultBrowserType, ...rest } = o; try { await run(k, rest); } catch (e) { ok(k + ': ABBRUCH', false, e.message.split('\n')[0]); await browser.close(); }
+    try { await runGate(k, rest); } catch (e) { ok(k + ': Zugang ABBRUCH', false, e.message.split('\n')[0]); await browser.close(); }
   }
   const fail = results.filter(r => !r.pass);
   console.log(`\n${results.length - fail.length}/${results.length} bestanden`);

@@ -2,15 +2,47 @@
 
 Eine kleine Web-App für Schwangerschaft, Babyzeit und die ersten Kleinkindjahre. Ausgerichtet auf Österreich, gebaut für den Eigengebrauch.
 
-**Version 1.0.0**
+**Version 1.1.0**
 
 ## Datenschutz
 
-Alle Einträge bleiben ausschließlich auf dem Gerät, im Speicher des Browsers (IndexedDB). Es gibt keinen Server, keine Cloud, kein Konto, kein Tracking und keine externen Schriften oder Skripte.
+Alle Einträge bleiben ausschließlich auf dem Gerät, im Speicher des Browsers (IndexedDB). Es gibt keine Cloud für eure Daten, kein Tracking und keine externen Schriften oder Skripte.
+
+Zum Öffnen der App braucht es ein freigeschaltetes Konto (siehe „Zugang“). Dafür gehen nur E-Mail-Adresse, Passwort und der Freischaltungs-Status an Firebase (Google), keine Einträge der App.
 
 Das Repository enthält nur den Programmcode, nie eure Daten. Beim Aufrufen der Seite sieht GitHub wie jede Website technische Zugriffsdaten (z. B. die IP-Adresse), aber keine Inhalte der App.
 
 Zum Abgleich zwischen zwei Handys schickt man sich eine Datei direkt von Gerät zu Gerät (z. B. per AirDrop oder Signal). Diese Datei enthält alle Einträge inklusive Gesundheitsdaten und Fotos. Bitte nicht in Gruppen-Chats, öffentliche Cloud-Ordner oder dieses Repository legen. Die `.gitignore` verhindert, dass Exportdateien versehentlich eingecheckt werden.
+
+## Zugang
+
+Die App ist eine geschlossene Tür: Wer den Link öffnet, sieht nur die Anmeldung. Genutzt wird das Firebase-Projekt vom Ballonflugbuch (`ballonflugbuch`), also dieselben Konten.
+
+1. Konto anlegen (E-Mail und Passwort, mindestens 8 Zeichen) und den Link in der Bestätigungs-E-Mail antippen.
+2. „Ich habe bestätigt“ tippen. Die App schickt eine Freischaltungs-Anfrage.
+3. Der Administrator schaltet unter Einstellungen → Freischaltung frei. Danach „Erneut prüfen“.
+
+Die Freischaltung wird je Gerät gemerkt, die App startet also auch ohne Netz. Mit Netz prüft sie beim Start, ob der Zugang noch gilt; ein gesperrtes Konto ist dann wieder ausgesperrt. Abmelden sperrt die App auf dem Gerät, die Einträge bleiben gespeichert.
+
+Die Freischaltung für Wuzerl ist getrennt von der des Ballonflugbuchs. Die Sperre ist eine Eingangstür, kein Ersatz für eine Bildschirmsperre: Die Daten selbst liegen ohnehin nur auf dem Gerät.
+
+### Einmalig in Firebase einrichten
+
+In der Firebase-Konsole des Projekts `ballonflugbuch` unter **Firestore Database → Regeln** diese zwei Blöcke in die bestehenden Regeln einfügen (innerhalb von `match /databases/{database}/documents { … }`, neben `anfragen` und `freigaben`; `istAdmin()` und `bestaetigt()` gibt es dort schon) und veröffentlichen:
+
+```
+    match /wuzerl_anfragen/{uid} {
+      allow create, update: if bestaetigt() && request.auth.uid == uid
+                            && request.resource.data.keys().hasOnly(["email", "zeit"]) && request.resource.data.email == request.auth.token.email;
+      allow read, delete: if request.auth != null && (request.auth.uid == uid || istAdmin());
+    }
+    match /wuzerl_freigaben/{uid} {
+      allow read: if request.auth != null && (request.auth.uid == uid || istAdmin());
+      allow write: if istAdmin();
+    }
+```
+
+Ohne diese Regeln kommt nur der Administrator hinein, alle anderen bleiben bei „Wartet auf Freischaltung“.
 
 ## Funktionen
 
