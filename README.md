@@ -33,7 +33,8 @@ In der Firebase-Konsole des Projekts `ballonflugbuch` unter **Firestore Database
 ```
     match /wuzerl_anfragen/{uid} {
       allow create, update: if bestaetigt() && request.auth.uid == uid
-                            && request.resource.data.keys().hasOnly(["email", "zeit"]) && request.resource.data.email == request.auth.token.email;
+                            && request.resource.data.keys().hasOnly(["email", "zeit"]) && request.resource.data.email == request.auth.token.email
+                            && request.resource.data.zeit is int;
       allow read, delete: if request.auth != null && (request.auth.uid == uid || istAdmin());
     }
     match /wuzerl_freigaben/{uid} {

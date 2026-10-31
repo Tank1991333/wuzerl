@@ -42,7 +42,7 @@ function createFake() {
       if (m === 'GET') { if (!own && !admin) return err(route, 403, 'PERMISSION_DENIED'); return store[id] ? json(route, doc(coll, id, store[id])) : err(route, 404, 'NOT_FOUND'); }
       if (m === 'PATCH') {
         const f = JSON.parse(body).fields || {}, d = { email: f.email && f.email.stringValue, zeit: Number(f.zeit && f.zeit.integerValue) };
-        const keysOk = Object.keys(f).every(k => ['email', 'zeit'].includes(k));
+        const keysOk = Object.keys(f).every(k => ['email', 'zeit'].includes(k)) && !!(f.zeit && f.zeit.integerValue);
         if (coll === 'wuzerl_anfragen' && !(own && auth.email_verified && keysOk && d.email === auth.email)) return err(route, 403, 'PERMISSION_DENIED');
         if (coll === 'wuzerl_freigaben' && !admin) return err(route, 403, 'PERMISSION_DENIED');
         store[id] = d; return json(route, doc(coll, id, d));
