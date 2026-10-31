@@ -203,7 +203,7 @@ const val=(v,ks)=>typeof v==='function'?v(ks):v;
 const num=s=>{const n=Number(String(s||'').replace(',','.'));return isFinite(n)?n:0};
 
 /* ---------- store: nur auf diesem Gerät (IndexedDB) ---------- */
-const APP_VERSION='1.1.0';
+const APP_VERSION='1.1.1';
 const LK='unserbaby:v1',ME='unserbaby:me',KURZ='unserbaby:kurz',SYNC='unserbaby:sync';
 const COLLS=['meta','checks','logs','pass','appts','contr','names','contacts','diary'];
 const blank=()=>Object.fromEntries(COLLS.map(c=>[c,{}]));
@@ -779,7 +779,7 @@ const isAdmin=()=>!!(Z.user&&Z.user.uid===FB.adminUid);
 async function fbPost(url,body,form){
   const r=await fetch(url,{method:'POST',headers:{'Content-Type':form?'application/x-www-form-urlencoded':'application/json'},body:form?new URLSearchParams(body):JSON.stringify(body)});
   const j=await r.json().catch(()=>({}));
-  if(!r.ok){const m=String((j.error&&j.error.message)||r.status),e=new Error(m);e.code=m.split(/[ :]/)[0];throw e}
+  if(!r.ok){const m=String((j.error&&j.error.message)||r.status),e=new Error(m);e.code=/^Requests (from|to)/.test(m)?'KEY_BLOCKED':m.split(/[ :]/)[0];throw e}
   return j;
 }
 const claims=t=>{try{return JSON.parse(decodeURIComponent(escape(atob(t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')))))}catch(e){return {}}};
@@ -809,7 +809,8 @@ const zText=e=>{const c=e&&e.code;
   if(c==='WEAK_PASSWORD'||c==='PASSWORD_DOES_NOT_MEET_REQUIREMENTS')return 'Das Passwort ist zu schwach. Bitte mindestens 8 Zeichen.';
   if(c==='TOO_MANY_ATTEMPTS_TRY_LATER')return 'Zu viele Versuche. Bitte später noch einmal.';
   if(c==='USER_DISABLED')return 'Dieses Konto ist gesperrt.';
-  return 'Das hat nicht geklappt ('+c+').'};
+  if(c==='KEY_BLOCKED')return 'Die Anmeldung ist von dieser Adresse ('+location.host+') aus nicht erlaubt. Der Firebase-Schlüssel muss dafür freigegeben werden.';
+  return 'Das hat nicht geklappt ('+e.message+').'};
 function zMsg(m,err){Z.msg=m||'';Z.err=!!err;Z.busy=false;render()}
 function offen(){lsSet(ZUGANG,Z.user.uid);Z.state=null;Z.msg='';Z.busy=false;render()}
 function sperre(s,m){lsSet(ZUGANG,null);Z.state=s;Z.busy=false;Z.msg=m||'';Z.err=false;render()}

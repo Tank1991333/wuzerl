@@ -6,7 +6,7 @@
 
 Wuzerl ist eine private Web-App für ein Paar in Österreich: Schwangerschaft, Babyzeit und erste Kleinkindjahre organisieren. Nutzer sind die beiden Eltern (Rollen „M“ = Mama, „P“ = Partner:in), optional Großeltern über eine Kurzansicht. Kein Produkt für Dritte.
 
-Aktuelle Version: **1.1.0** (`APP_VERSION` in `index.html`, `CACHE` in `sw.js`).
+Aktuelle Version: **1.1.1** (`APP_VERSION` in `index.html`, `CACHE` in `sw.js`).
 
 ## Harte Regeln (nicht verhandelbar)
 
@@ -102,7 +102,7 @@ Import akzeptiert `app` = `wuzerl` und das alte `unser-baby`. Zusammenführen pr
 - `Z.state`: `login`, `bestaetigen`, `warten`, `laden` oder `null` (offen). Pro Gerät in `localStorage`: `unserbaby:auth` (uid, E-Mail, Refresh-Token) und `unserbaby:zugang` (uid, wenn freigeschaltet).
 - Gesperrt wird nur bei eindeutigem Ergebnis (keine Freigabe, Konto ungültig). Ohne Netz bleibt die gemerkte Freischaltung gültig.
 - Im claude.ai-Artifact (`window.claude`) ist die Tür aus (`gateOn`).
-- Die Firestore-Regeln stehen im README und müssen in der Firebase-Konsole veröffentlicht sein.
+- Die Firestore-Regeln stehen im README und müssen in der Firebase-Konsole veröffentlicht sein. Jede Adresse, unter der Wuzerl läuft (`wuzerl.vercel.app`, `tank1991333.github.io`), muss in den Website-Einschränkungen des API-Schlüssels stehen.
 - Tests simulieren Firebase in `tests/fakefb.js`, es geht nichts ins Netz.
 
 ## Fristen und Inhalte (`DEFS`)

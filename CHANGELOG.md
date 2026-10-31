@@ -1,5 +1,10 @@
 # Änderungen
 
+## 1.1.1 (31. Oktober 2026)
+
+- Klare Meldung, wenn die Anmeldung von einer Adresse aus nicht erlaubt ist (Website-Einschränkung des Firebase-Schlüssels), statt „Das hat nicht geklappt (Requests)“
+- Unbekannte Fehler zeigen die vollständige Meldung
+
 ## 1.1.0 (31. Oktober 2026)
 
 - Zugang nur mit freigeschaltetem Konto: Anmeldung über das Firebase-Projekt vom Ballonflugbuch (gleiche Konten), E-Mail-Bestätigung, Freischaltung durch den Administrator unter Einstellungen → Freischaltung

@@ -2,7 +2,7 @@
 
 Eine kleine Web-App für Schwangerschaft, Babyzeit und die ersten Kleinkindjahre. Ausgerichtet auf Österreich, gebaut für den Eigengebrauch.
 
-**Version 1.1.0**
+**Version 1.1.1**
 
 ## Datenschutz
 
@@ -44,6 +44,8 @@ In der Firebase-Konsole des Projekts `ballonflugbuch` unter **Firestore Database
 ```
 
 Ohne diese Regeln kommt nur der Administrator hinein, alle anderen bleiben bei „Wartet auf Freischaltung“.
+
+Außerdem muss die Adresse, unter der Wuzerl läuft, beim Firebase-Schlüssel erlaubt sein: Google Cloud Console → APIs & Dienste → Anmeldedaten → Browser-Schlüssel → Website-Einschränkungen, z. B. `wuzerl.vercel.app/*` und `tank1991333.github.io/*`. Sonst meldet die App, dass die Anmeldung von dieser Adresse aus nicht erlaubt ist.
 
 ## Funktionen
 
